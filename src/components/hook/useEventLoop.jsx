@@ -85,4 +85,29 @@ export const useEventLoop = () => {
 
     return EXPLANATIONS.EMPTY;
   }, [callStack, microtaskQueue, macrotaskQueue, addLog]);
+
+  const reset = useCallback(() => {
+    setCallStack([]);
+    setMicrotaskQueue([]);
+    setMacrotaskQueue([]);
+    setExecutionLog([]);
+    setStepCount(0);
+  }, []);
+
+  const hasActiveTasks =
+    callStack.length > 0 ||
+    microtaskQueue.length > 0 ||
+    macrotaskQueue.length > 0;
+
+  return {
+    callStack,
+    microtaskQueue,
+    macrotaskQueue,
+    executionLog,
+    stepCount,
+    addTask,
+    executeNextStep,
+    reset,
+    hasActiveTasks,
+  };
 };
