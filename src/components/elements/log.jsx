@@ -16,3 +16,5 @@ const LogEntry = ({ log }) => (
     </span>
   </div>
 );
+
+export default LogEntry;
