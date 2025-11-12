@@ -7,52 +7,87 @@ export const createTask = (() => {
     type,
     name: `${name} #${counter}`,
     delay,
-    status: 'pending',
-    createdAt: Date.now()
+    status: "pending",
+    createdAt: Date.now(),
   });
 })();
 
 export const parseUserCode = (code) => {
   const tasks = [];
-  const lines = code.split('\n');
-  
-  lines.forEach(line => {
-    const trimmed = line.trim();
-    
-    // Parse console.log (synchronous)
-    if (trimmed.includes('console.log') && !trimmed.includes('setTimeout') && !trimmed.includes('Promise')) {
-      const match = trimmed.match(/console\.log\(['"](.+?)['"]\)/);
+  const lines = code
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l);
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Skip comments and empty lines
+    if (line.startsWith("//") || line.startsWith("/*") || !line) continue;
+
+    // Parse synchronous console.log
+    if (
+      line.includes("console.log") &&
+      !line.includes("setTimeout") &&
+      !line.includes("Promise") &&
+      !line.includes("queueMicrotask") &&
+      !line.includes("=>")
+    ) {
+      const match = line.match(/console\.log\(['"`](.+?)['"`]\)/);
       if (match) {
-        tasks.push(createTask(TASK_TYPES.SYNC, `Log: ${match[1]}`));
+        tasks.push(createTask(TASK_TYPES.SYNC, match[1]));
       }
     }
-    
-    // Parse Promise.resolve().then()
-    if (trimmed.includes('Promise.resolve().then')) {
-      const match = trimmed.match(/console\.log\(['"](.+?)['"]\)/);
-      if (match) {
-        tasks.push(createTask(TASK_TYPES.PROMISE, `Promise: ${match[1]}`));
+
+    // Parse Promise.resolve().then() or new Promise
+    if (
+      (line.includes("Promise.resolve().then") || line.includes(".then(")) &&
+      !line.includes("setTimeout")
+    ) {
+      // Look for console.log in the same line or next line
+      let logMatch = line.match(/console\.log\(['"`](.+?)['"`]\)/);
+      if (!logMatch && i + 1 < lines.length) {
+        logMatch = lines[i + 1].match(/console\.log\(['"`](.+?)['"`]\)/);
+      }
+      if (logMatch) {
+        tasks.push(createTask(TASK_TYPES.PROMISE, logMatch[1]));
+      } else {
+        tasks.push(createTask(TASK_TYPES.PROMISE, "Promise callback"));
       }
     }
-    
+
     // Parse setTimeout
-    if (trimmed.includes('setTimeout')) {
-      const match = trimmed.match(/console\.log\(['"](.+?)['"]\)/);
-      const delayMatch = trimmed.match(/,\s*(\d+)\s*\)/);
-      if (match) {
-        const delay = delayMatch ? parseInt(delayMatch[1]) : 0;
-        tasks.push(createTask(TASK_TYPES.SETTIMEOUT, `Timeout: ${match[1]}`, delay));
+    if (line.includes("setTimeout")) {
+      const delayMatch = line.match(/,\s*(\d+)\s*\)/);
+      const delay = delayMatch ? parseInt(delayMatch[1]) : 0;
+
+      // Look for console.log in the same line or next line
+      let logMatch = line.match(/console\.log\(['"`](.+?)['"`]\)/);
+      if (!logMatch && i + 1 < lines.length) {
+        logMatch = lines[i + 1].match(/console\.log\(['"`](.+?)['"`]\)/);
+      }
+      if (logMatch) {
+        tasks.push(createTask(TASK_TYPES.SETTIMEOUT, logMatch[1], delay));
+      } else {
+        tasks.push(
+          createTask(TASK_TYPES.SETTIMEOUT, `Timeout (${delay}ms)`, delay)
+        );
       }
     }
-    
+
     // Parse queueMicrotask
-    if (trimmed.includes('queueMicrotask')) {
-      const match = trimmed.match(/console\.log\(['"](.+?)['"]\)/);
-      if (match) {
-        tasks.push(createTask(TASK_TYPES.QUEUE_MICROTASK, `QMT: ${match[1]}`));
+    if (line.includes("queueMicrotask")) {
+      let logMatch = line.match(/console\.log\(['"`](.+?)['"`]\)/);
+      if (!logMatch && i + 1 < lines.length) {
+        logMatch = lines[i + 1].match(/console\.log\(['"`](.+?)['"`]\)/);
+      }
+      if (logMatch) {
+        tasks.push(createTask(TASK_TYPES.QUEUE_MICROTASK, logMatch[1]));
+      } else {
+        tasks.push(createTask(TASK_TYPES.QUEUE_MICROTASK, "Microtask"));
       }
     }
-  });
-  
+  }
+
   return tasks;
 };

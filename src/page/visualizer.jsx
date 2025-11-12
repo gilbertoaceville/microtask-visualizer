@@ -235,6 +235,12 @@ const MicrotaskVisualizer = () => {
           </ul>
         </footer>
       </div>
+
+      <CodeInputModal
+        isOpen={showCodeModal}
+        onClose={() => setShowCodeModal(false)}
+        onSubmit={handleCodeSubmit}
+      />
     </div>
   );
 };
