@@ -1,10 +1,17 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useEventLoop } from "../components/hook/useEventLoop";
-import { EVENT_LOOP_RULES, TASK_BUTTONS } from "../utils/constants";
+import {
+  EVENT_LOOP_RULES,
+  EXPLANATIONS,
+  TASK_BUTTONS,
+  TASK_TYPES,
+} from "../utils/constants";
+import { parseUserCode } from "../utils/helper";
 import ControlButton from "../components/elements/button";
 import { ChevronRight, Code, Pause, Play, Plus, RotateCcw } from "lucide-react";
 import QueueColumn from "../components/modules/queue-column";
 import LogEntry from "../components/elements/log";
+import CodeInputModal from "../components/modules/input-modal";
 
 const MicrotaskVisualizer = () => {
   const {
@@ -13,6 +20,8 @@ const MicrotaskVisualizer = () => {
     macrotaskQueue,
     executionLog,
     addTask,
+    executeNextStep,
+    reset,
     hasActiveTasks,
   } = useEventLoop();
 
@@ -24,11 +33,75 @@ const MicrotaskVisualizer = () => {
   const [showCodeModal, setShowCodeModal] = useState(false);
   const logRef = useRef(null);
 
-  const handleStep = useCallback(() => {}, []);
+  useEffect(() => {
+    if (logRef.current) {
+      logRef.current.scrollTop = logRef.current.scrollHeight;
+    }
+  }, [executionLog]);
 
-  const handleReset = useCallback(() => {}, []);
+  useEffect(() => {
+    let interval;
+    if (isRunning && hasActiveTasks) {
+      interval = setInterval(() => {
+        const explanation = executeNextStep();
+        setCurrentExplanation(explanation);
+      }, speed);
+    } else if (isRunning) {
+      setIsRunning(false);
+    }
+    return () => clearInterval(interval);
+  }, [isRunning, hasActiveTasks, speed, executeNextStep]);
 
-  const loadExample = useCallback(() => {}, []);
+  const handleStep = useCallback(() => {
+    const explanation = executeNextStep();
+    setCurrentExplanation(explanation);
+  }, [executeNextStep]);
+
+  const handleReset = useCallback(() => {
+    reset();
+    setIsRunning(false);
+    setCurrentExplanation(EXPLANATIONS.RESET);
+  }, [reset]);
+
+  const loadExample = useCallback(() => {
+    handleReset();
+    setTimeout(() => {
+      addTask(TASK_TYPES.SYNC, "Sync Code");
+      addTask(TASK_TYPES.PROMISE, "Promise");
+      addTask(TASK_TYPES.SETTIMEOUT, "setTimeout");
+      addTask(TASK_TYPES.PROMISE, "Promise");
+      addTask(TASK_TYPES.SYNC, "Sync Code");
+      setCurrentExplanation(EXPLANATIONS.EXAMPLE_LOADED);
+    }, 100);
+  }, [addTask, handleReset]);
+
+  const handleCodeSubmit = useCallback(
+    (code) => {
+      try {
+        handleReset();
+        setTimeout(() => {
+          const tasks = parseUserCode(code);
+
+          if (tasks.length === 0) {
+            setCurrentExplanation(
+              "No recognizable tasks found in code. Try using console.log(), Promises, or setTimeout."
+            );
+            return;
+          }
+
+          tasks.forEach((task) => {
+            addTask(task.type, task.name.split("#")[0].trim(), task.delay);
+          });
+
+          setCurrentExplanation(EXPLANATIONS.CODE_PARSED);
+          setShowCodeModal(false);
+        }, 100);
+      } catch (error) {
+        setCurrentExplanation(EXPLANATIONS.CODE_ERROR);
+      }
+    },
+    [addTask, handleReset]
+  );
 
   return (
     <div className="w-full min-h-screen bg-gray-900 text-white p-4 overflow-auto">
