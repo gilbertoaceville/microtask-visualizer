@@ -14,77 +14,149 @@ export const createTask = (() => {
 
 export const parseUserCode = (code) => {
   const tasks = [];
-  const lines = code
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l);
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+  // Remove comments
+  let cleanCode = code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
 
-    // Skip comments and empty lines
-    if (line.startsWith("//") || line.startsWith("/*") || !line) continue;
+  // Track all console.log calls with their context
+  const consoleLogPattern = /console\.log\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g;
 
-    // Parse synchronous console.log
-    if (
-      line.includes("console.log") &&
-      !line.includes("setTimeout") &&
-      !line.includes("Promise") &&
-      !line.includes("queueMicrotask") &&
-      !line.includes("=>")
-    ) {
-      const match = line.match(/console\.log\(['"`](.+?)['"`]\)/);
-      if (match) {
-        tasks.push(createTask(TASK_TYPES.SYNC, match[1]));
+  //All async contexts (setTimeout, Promise, queueMicrotask)
+  const asyncContexts = [];
+
+  //SetTimeout calls
+  const setTimeoutPattern =
+    /setTimeout\s*\(\s*(?:function\s*\([^)]*\)\s*\{|(?:\([^)]*\)|[^,]+)\s*=>\s*\{?)([\s\S]*?)(?:\}|,)/g;
+  let match;
+
+  while ((match = setTimeoutPattern.exec(cleanCode)) !== null) {
+    const body = match[1];
+    const delayMatch = cleanCode.substring(match.index).match(/,\s*(\d+)\s*\)/);
+    const delay = delayMatch ? parseInt(delayMatch[1]) : 0;
+
+    asyncContexts.push({
+      type: TASK_TYPES.SETTIMEOUT,
+      start: match.index,
+      end: match.index + match[0].length,
+      body: body,
+      delay: delay,
+    });
+  }
+
+  //Promise.then calls
+  const promisePattern =
+    /Promise\.resolve\s*\(\s*\)\.then\s*\(\s*(?:function\s*\([^)]*\)\s*\{|(?:\([^)]*\)|[^,]+)\s*=>\s*\{?)([\s\S]*?)(?:\}|,|\))/g;
+
+  while ((match = promisePattern.exec(cleanCode)) !== null) {
+    const body = match[1];
+    asyncContexts.push({
+      type: TASK_TYPES.PROMISE,
+      start: match.index,
+      end: match.index + match[0].length,
+      body: body,
+    });
+  }
+
+  // Find .then() calls on existing promises
+  const thenPattern =
+    /\.then\s*\(\s*(?:function\s*\([^)]*\)\s*\{|(?:\([^)]*\)|[^,]+)\s*=>\s*\{?)([\s\S]*?)(?:\}|\))/g;
+
+  while ((match = thenPattern.exec(cleanCode)) !== null) {
+    const body = match[1];
+    // Check if this .then is not already part of Promise.resolve()
+    const beforeContext = cleanCode.substring(
+      Math.max(0, match.index - 20),
+      match.index
+    );
+    if (!beforeContext.includes("Promise.resolve()")) {
+      asyncContexts.push({
+        type: TASK_TYPES.PROMISE,
+        start: match.index,
+        end: match.index + match[0].length,
+        body: body,
+      });
+    }
+  }
+
+  //QueueMicrotask calls
+  const queueMicrotaskPattern =
+    /queueMicrotask\s*\(\s*(?:function\s*\([^)]*\)\s*\{|(?:\([^)]*\)|[^,]+)\s*=>\s*\{?)([\s\S]*?)(?:\}|\))/g;
+
+  while ((match = queueMicrotaskPattern.exec(cleanCode)) !== null) {
+    const body = match[1];
+    asyncContexts.push({
+      type: TASK_TYPES.QUEUE_MICROTASK,
+      start: match.index,
+      end: match.index + match[0].length,
+      body: body,
+    });
+  }
+
+  //All console.log calls
+  const allConsoleLogs = [];
+  let consoleMatch;
+
+  while ((consoleMatch = consoleLogPattern.exec(cleanCode)) !== null) {
+    allConsoleLogs.push({
+      message: consoleMatch[1],
+      index: consoleMatch.index,
+    });
+  }
+
+  // Categorize console.log calls
+  allConsoleLogs.forEach((log) => {
+    //If this console.log is inside any async context
+    let isAsync = false;
+    let asyncType = null;
+    let delay = 0;
+
+    for (const context of asyncContexts) {
+      if (log.index > context.start && log.index < context.end) {
+        isAsync = true;
+        asyncType = context.type;
+        delay = context.delay || 0;
+        break;
       }
     }
 
-    // Parse Promise.resolve().then() or new Promise
-    if (
-      (line.includes("Promise.resolve().then") || line.includes(".then(")) &&
-      !line.includes("setTimeout")
-    ) {
-      // Look for console.log in the same line or next line
-      let logMatch = line.match(/console\.log\(['"`](.+?)['"`]\)/);
-      if (!logMatch && i + 1 < lines.length) {
-        logMatch = lines[i + 1].match(/console\.log\(['"`](.+?)['"`]\)/);
-      }
-      if (logMatch) {
-        tasks.push(createTask(TASK_TYPES.PROMISE, logMatch[1]));
-      } else {
-        tasks.push(createTask(TASK_TYPES.PROMISE, "Promise callback"));
+    if (isAsync) {
+      tasks.push(createTask(asyncType, log.message, delay));
+    } else {
+      // Synchronous console.log
+      tasks.push(createTask(TASK_TYPES.SYNC, log.message));
+    }
+  });
+
+  //Function declarations as sync tasks
+  const functionPattern =
+    /(?:function\s+(\w+)|(?:const|let|var)\s+(\w+)\s*=\s*(?:function|\([^)]*\)\s*=>))/g;
+
+  while ((match = functionPattern.exec(cleanCode)) !== null) {
+    const funcName = match[1] || match[2];
+    // Only add if it's not inside an async context and has no console.log in it already counted
+    let isInAsync = false;
+    for (const context of asyncContexts) {
+      if (match.index > context.start && match.index < context.end) {
+        isInAsync = true;
+        break;
       }
     }
 
-    // Parse setTimeout
-    if (line.includes("setTimeout")) {
-      const delayMatch = line.match(/,\s*(\d+)\s*\)/);
-      const delay = delayMatch ? parseInt(delayMatch[1]) : 0;
+    if (!isInAsync) {
+      // Check if this function has any console.log that hasn't been added already
+      const funcStart = match.index;
+      const funcBody = cleanCode.substring(funcStart);
+      const funcEndMatch = funcBody.match(/\{[\s\S]*?\}/);
 
-      // Look for console.log in the same line or next line
-      let logMatch = line.match(/console\.log\(['"`](.+?)['"`]\)/);
-      if (!logMatch && i + 1 < lines.length) {
-        logMatch = lines[i + 1].match(/console\.log\(['"`](.+?)['"`]\)/);
-      }
-      if (logMatch) {
-        tasks.push(createTask(TASK_TYPES.SETTIMEOUT, logMatch[1], delay));
-      } else {
-        tasks.push(
-          createTask(TASK_TYPES.SETTIMEOUT, `Timeout (${delay}ms)`, delay)
+      if (funcEndMatch) {
+        const funcEnd = funcStart + funcEndMatch.index + funcEndMatch[0].length;
+        const hasConsoleInBody = allConsoleLogs.some(
+          (log) => log.index > funcStart && log.index < funcEnd
         );
-      }
-    }
 
-    // Parse queueMicrotask
-    if (line.includes("queueMicrotask")) {
-      let logMatch = line.match(/console\.log\(['"`](.+?)['"`]\)/);
-      if (!logMatch && i + 1 < lines.length) {
-        logMatch = lines[i + 1].match(/console\.log\(['"`](.+?)['"`]\)/);
-      }
-      if (logMatch) {
-        tasks.push(createTask(TASK_TYPES.QUEUE_MICROTASK, logMatch[1]));
-      } else {
-        tasks.push(createTask(TASK_TYPES.QUEUE_MICROTASK, "Microtask"));
+        if (!hasConsoleInBody) {
+          tasks.push(createTask(TASK_TYPES.SYNC, `Define ${funcName}`));
+        }
       }
     }
   }
