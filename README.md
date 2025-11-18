@@ -1,70 +1,112 @@
-# Getting Started with Create React App
+# Microtask Visualizer
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+An interactive tool to visualize JavaScript's event loop — including how **microtasks** and **macrotasks** are scheduled and executed.
 
-## Available Scripts
+---
 
-In the project directory, you can run:
+## 🚀 Quick Start
 
-### `npm start`
+```bash
+# Create project
+npx create-react-app microtask-visualizer
+cd microtask-visualizer
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+# Install dependencies
+npm install lucide-react
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+# Install Tailwind
+npm install -D tailwindcss postcss autoprefixer
+npx tailwindcss init -p
 
-### `npm test`
+# Run the development server
+npm start
+```
+---
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## ⚙️ Setup
 
-### `npm run build`
+### 1. Configure Tailwind
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+Edit tailwind.config.js:
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+```javascript
+export default {
+  content: ["./src/**/*.{js,jsx}"],
+  theme: { extend: {} },
+  plugins: [],
+}
+```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+### 2. Update CSS
 
-### `npm run eject`
+Replace src/index.css with:
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+```
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+### 3. Add Component
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+Create:
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+```javascript
+src/visualizer.jsx
+```
+and add the visualizer component code.
 
-## Learn More
+### 4. Update App
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+Replace the contents of src/App.jsx with:
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+```javascript
+import MicrotaskVisualizer from "./page/visualizer";
 
-### Code Splitting
+function App() {
+  return <MicrotaskVisualizer />
+}
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+export default App
+```
+---
 
-### Analyzing the Bundle Size
+## 🌟 Features
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+### Visualizes:
+- Call stack  
+- Microtask queue  
+- Macrotask queue  
 
-### Making a Progressive Web App
+### Other Features:
+- Paste custom JavaScript code  
+- Step-by-step execution  
+- Auto-run mode  
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+### Supports:
+- Promises  
+- async/await  
+- setTimeout  
+- queueMicrotask  
 
-### Advanced Configuration
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+## 🧪 Usage
 
-### Deployment
+1. Click **"Paste Code"** to enter JavaScript.  
+2. Try built-in examples or write your own.  
+3. Click **"Step Forward"** to walk through execution.  
+4. Watch how the event loop processes each task.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+---
 
-### `npm run build` fails to minify
+## 📦 Build
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+```bash
+npm run build
+```
+---
+
+## 📄 License
+
+### MIT
